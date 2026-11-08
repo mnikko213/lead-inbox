@@ -8,18 +8,27 @@ const message = document.getElementById("message");
 const messageCount = document.getElementById("message-count");
 
 const charCount = (text) => [...text].length;
+const errorElement = (field) => document.getElementById(`${field}-error`);
+
+function controlsFor(field) {
+  return field === "service" ? [...form.querySelectorAll('input[name="service"]')] : [form.elements[field]];
+}
 
 function showFieldError(field, text) {
-  const error = document.getElementById(`${field}-error`);
+  const error = errorElement(field);
   error.textContent = text;
   error.hidden = false;
-  form.elements[field]?.setAttribute?.("aria-invalid", "true");
+  for (const control of controlsFor(field)) control.setAttribute("aria-invalid", "true");
+}
+
+function clearFieldError(field) {
+  errorElement(field).hidden = true;
+  for (const control of controlsFor(field)) control.removeAttribute("aria-invalid");
 }
 
 function clearErrors() {
   alertBox.hidden = true;
-  for (const error of form.querySelectorAll(".field-error")) error.hidden = true;
-  for (const input of form.querySelectorAll("[aria-invalid]")) input.removeAttribute("aria-invalid");
+  for (const field of ["name", "email", "phone", "service", "message"]) clearFieldError(field);
 }
 
 function readForm() {
@@ -48,15 +57,19 @@ function checkLead(lead) {
 }
 
 function focusField(field) {
-  const target = field === "service" ? form.querySelector('input[name="service"]') : form.elements[field];
-  target?.focus();
+  controlsFor(field)[0].focus();
 }
 
 function updateMessageCount() {
   const used = charCount(message.value);
-  messageCount.hidden = used < LIMITS.message - 200;
   messageCount.textContent = `${used} of ${LIMITS.message} characters`;
   messageCount.classList.toggle("over", used > LIMITS.message);
+}
+
+function setSending(sending) {
+  submit.disabled = sending;
+  submit.classList.toggle("is-busy", sending);
+  submit.textContent = sending ? "Sending request" : "Send request";
 }
 
 function showReceipt(lead) {
@@ -67,8 +80,29 @@ function showReceipt(lead) {
   receipt.focus();
 }
 
+/* Errors appear when someone leaves a field they've filled in, and clear as soon as it's fixed. */
+for (const field of ["name", "email", "phone", "message"]) {
+  const control = form.elements[field];
+  control.addEventListener("blur", () => {
+    if (!control.value) return;
+    const error = checkLead(readForm())[field];
+    if (error) showFieldError(field, error);
+  });
+  control.addEventListener("input", () => {
+    if (errorElement(field).hidden) return;
+    const error = checkLead(readForm())[field];
+    if (error) showFieldError(field, error);
+    else clearFieldError(field);
+  });
+}
+
+form.addEventListener("change", (event) => {
+  if (event.target.name === "service") clearFieldError("service");
+});
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (submit.disabled) return;
   clearErrors();
 
   const lead = readForm();
@@ -79,8 +113,7 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
-  submit.disabled = true;
-  submit.textContent = "Sending";
+  setSending(true);
   try {
     const response = await fetch("/api/leads", {
       method: "POST",
@@ -104,8 +137,7 @@ form.addEventListener("submit", async (event) => {
     alertBox.textContent = "The request was not sent. Check your connection and try again. Your details are still here.";
     alertBox.hidden = false;
   } finally {
-    submit.disabled = false;
-    submit.textContent = "Send request";
+    setSending(false);
   }
 });
 
@@ -113,6 +145,7 @@ message.addEventListener("input", updateMessageCount);
 
 document.getElementById("another").addEventListener("click", () => {
   form.reset();
+  clearErrors();
   updateMessageCount();
   receipt.hidden = true;
   form.hidden = false;

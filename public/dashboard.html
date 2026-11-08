@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#1f2a86">
   <title>Leads</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="preload" href="/fonts/bricolage.woff2" as="font" type="font/woff2" crossorigin>
@@ -12,7 +13,10 @@
 <body class="desk">
   <header class="desk-header">
     <div class="desk-header-row">
-      <h1>Leads</h1>
+      <div class="desk-title">
+        <h1>Leads</h1>
+        <p id="summary" class="desk-summary"></p>
+      </div>
       <button class="link-button" id="sign-out" type="button">Sign out</button>
     </div>
     <nav id="status-tabs" class="status-tabs" aria-label="Filter by status"></nav>
@@ -20,9 +24,19 @@
 
   <div class="workspace">
     <section class="inbox" aria-label="Leads">
+      <div class="search">
+        <label class="visually-hidden" for="search">Search leads</label>
+        <input id="search" type="search" autocomplete="off" enterkeyhint="search" placeholder="Search name, email, phone or message">
+      </div>
       <div id="category-filters" class="category-filters" role="group" aria-label="Filter by type"></div>
+      <p id="search-status" class="search-status" role="status"></p>
       <p id="load-error" class="form-alert" role="alert" hidden></p>
-      <ol id="ticket-list" class="ticket-list"></ol>
+      <ol id="ticket-list" class="ticket-list" aria-busy="true">
+        <li class="skeleton" aria-hidden="true"></li>
+        <li class="skeleton" aria-hidden="true"></li>
+        <li class="skeleton" aria-hidden="true"></li>
+        <li class="skeleton" aria-hidden="true"></li>
+      </ol>
       <div id="empty" class="empty" hidden></div>
       <p id="list-limit" class="list-limit" hidden></p>
     </section>

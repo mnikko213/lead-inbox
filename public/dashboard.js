@@ -5,16 +5,26 @@ const STATUSES = ["new", "contacted", "won", "lost"];
 const CATEGORIES = ["booking", "question", "complaint", "other"];
 const POLL_MS = 20_000;
 const LIST_LIMIT = 200;
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+const ICONS = {
+  phone: ["M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"],
+  mail: ["M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z", "m22 6-10 7L2 6"],
+  back: ["m15 18-6-6 6-6"],
+};
 
 const state = {
   leads: [],
   counts: { status: {}, category: {} },
+  summary: { new_total: 0, new_high: 0 },
   status: "",
   category: "",
+  search: "",
   current: null,
   snapshot: "",
   newestSeen: null,
   requestNumber: 0,
+  savingStatus: false,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -35,6 +45,19 @@ function h(tag, props = {}, ...children) {
   return element;
 }
 
+function icon(name) {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("class", "icon");
+  svg.setAttribute("aria-hidden", "true");
+  for (const d of ICONS[name]) {
+    const path = document.createElementNS(SVG_NS, "path");
+    path.setAttribute("d", d);
+    svg.append(path);
+  }
+  return svg;
+}
+
 const relativeFormat = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 function timeAgo(iso) {
   const seconds = Math.round((new Date(iso) - Date.now()) / 1000);
@@ -48,16 +71,31 @@ function timeAgo(iso) {
 const fullDate = (iso) => new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 
 let toastTimer;
-function toast(text) {
+function toast(text, action) {
   const box = $("toast");
-  box.textContent = text;
+  box.replaceChildren(h("span", {}, text));
+  if (action) {
+    box.append(h("button", {
+      type: "button",
+      className: "toast-action",
+      onclick: () => {
+        box.hidden = true;
+        action.run();
+      },
+    }, action.label));
+  }
   box.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { box.hidden = true; }, 4000);
+  toastTimer = setTimeout(() => { box.hidden = true; }, action ? 8000 : 4000);
 }
 
 async function ownerFetch(path, init) {
-  const response = await fetch(path, init);
+  let response;
+  try {
+    response = await fetch(path, init);
+  } catch {
+    throw new Error("Check your connection and try again.");
+  }
   if (response.status === 401) {
     location.assign("/login");
     throw new Error("Signed out");
@@ -108,15 +146,21 @@ async function load({ announce = false } = {}) {
     state.newestSeen = Math.max(state.newestSeen ?? 0, newest);
 
     const snapshot = JSON.stringify(data);
-    if (snapshot === state.snapshot) return;
+    if (snapshot === state.snapshot) {
+      refreshTimes();
+      return;
+    }
     state.snapshot = snapshot;
     state.leads = data.leads;
     state.counts = data.counts;
+    state.summary = data.summary;
     render();
   } catch (error) {
     if (error.message === "Signed out" || number !== state.requestNumber) return;
     $("load-error").textContent = "Leads could not be loaded. Retrying shortly.";
     $("load-error").hidden = false;
+    $("ticket-list").setAttribute("aria-busy", "false");
+    for (const row of document.querySelectorAll(".skeleton")) row.remove();
   }
 }
 
@@ -134,22 +178,33 @@ async function saveLead(id, patch) {
 /* ---------- Rendering ---------- */
 
 function render() {
+  renderSummary();
   renderStatusTabs();
   renderCategoryFilters();
   renderTickets();
   const fresh = state.current && state.leads.find((lead) => lead.id === state.current.id);
-  if (fresh && JSON.stringify(fresh) !== JSON.stringify(state.current) && !isNoteDirty()) {
+  const working = $("detail").contains(document.activeElement) || isNoteDirty();
+  if (fresh && JSON.stringify(fresh) !== JSON.stringify(state.current) && !working) {
     state.current = fresh;
     renderDetail();
   }
-  const newCount = state.counts.status.new ?? 0;
-  document.title = newCount ? `(${newCount}) Leads` : "Leads";
+}
+
+function renderSummary() {
+  const { new_total: total, new_high: high } = state.summary;
+  document.title = total ? `(${total}) Leads` : "Leads";
+  const parts = [];
+  if (total) parts.push(`${total} new`);
+  if (high) parts.push(`${high} high urgency`);
+  $("summary").textContent = parts.length ? parts.join(", ") : "All caught up";
 }
 
 function setFilter(key, value) {
   state[key] = value;
   state.snapshot = "";
   history.replaceState(null, "", urlFor(state.current?.id));
+  renderStatusTabs();
+  renderCategoryFilters();
   load();
 }
 
@@ -161,7 +216,7 @@ function renderStatusTabs() {
       className: "status-tab",
       "aria-current": state.status === value ? "true" : null,
       onclick: () => setFilter("status", value),
-    }, label, h("span", { className: "count" }, count));
+    }, h("span", {}, label), h("span", { className: "count" }, count));
   $("status-tabs").replaceChildren(
     tab("", "All", total),
     ...STATUSES.map((status) => tab(status, capitalize(status), state.counts.status[status] ?? 0)),
@@ -175,15 +230,23 @@ function renderCategoryFilters() {
       className: "chip",
       "aria-pressed": String(state.category === value),
       onclick: () => setFilter("category", value),
-    }, count === undefined ? label : `${label} ${count}`);
+    }, label, count !== undefined && h("span", { className: "count" }, count));
   $("category-filters").replaceChildren(
-    chip("", "All types"),
+    chip("", "Any type"),
     ...CATEGORIES.map((category) => chip(category, capitalize(category), state.counts.category[category] ?? 0)),
   );
 }
 
 const urgencyLabel = { high: "High urgency", normal: "Normal urgency", low: "Low urgency" };
 const serviceLabel = (service) => (service === "other" ? "Other service" : capitalize(service));
+
+function visibleLeads() {
+  const query = state.search.trim().toLowerCase();
+  if (!query) return state.leads;
+  return state.leads.filter((lead) =>
+    [lead.name, lead.email, lead.phone, lead.message, lead.note].some((value) => value.toLowerCase().includes(query)),
+  );
+}
 
 function ticket(lead) {
   return h("li", {},
@@ -196,14 +259,15 @@ function ticket(lead) {
     },
       h("span", { className: "ticket-top" },
         h("span", { className: "ticket-name" }, lead.name),
-        h("span", { className: "ticket-time", title: fullDate(lead.created_at) }, timeAgo(lead.created_at)),
+        h("span", { className: "ticket-time", title: fullDate(lead.created_at), "data-time": lead.created_at }, timeAgo(lead.created_at)),
       ),
       h("span", { className: "ticket-message" }, lead.message),
       h("span", { className: "ticket-bottom" },
         h("span", { className: "ticket-tags" },
-          h("span", {}, urgencyLabel[lead.urgency]),
+          lead.urgency !== "normal" && h("span", { className: `tag-${lead.urgency}` }, urgencyLabel[lead.urgency]),
           h("span", {}, capitalize(lead.category)),
           h("span", {}, serviceLabel(lead.service)),
+          lead.note && h("span", {}, "Has note"),
         ),
         h("span", { className: `stamp stamp-${lead.status}` }, capitalize(lead.status)),
       ),
@@ -211,19 +275,30 @@ function ticket(lead) {
   );
 }
 
+function refreshTimes() {
+  for (const element of document.querySelectorAll("[data-time]")) {
+    element.textContent = timeAgo(element.dataset.time);
+  }
+}
+
 function renderTickets() {
   const focusedId = document.activeElement?.dataset?.id;
-  $("ticket-list").replaceChildren(...state.leads.map(ticket));
+  const leads = visibleLeads();
+  const searching = Boolean(state.search.trim());
+  $("ticket-list").replaceChildren(...leads.map(ticket));
+  $("ticket-list").setAttribute("aria-busy", "false");
   if (focusedId) document.querySelector(`[data-id="${CSS.escape(focusedId)}"]`)?.focus();
 
+  $("search-status").textContent = searching ? `${leads.length} ${leads.length === 1 ? "lead" : "leads"} found` : "";
+
   const empty = $("empty");
-  empty.hidden = state.leads.length > 0;
-  if (!state.leads.length) {
-    const filtered = state.status || state.category;
+  empty.hidden = leads.length > 0;
+  if (!leads.length) {
+    const filtered = state.status || state.category || searching;
     empty.replaceChildren(
-      h("h2", {}, filtered ? "Nothing matches these filters" : "No leads yet"),
+      h("h2", {}, filtered ? "Nothing matches" : "No leads yet"),
       filtered
-        ? h("button", { type: "button", className: "secondary", onclick: clearFilters }, "Clear filters")
+        ? h("button", { type: "button", className: "secondary", onclick: clearFilters }, searching && !state.status && !state.category ? "Clear search" : "Clear filters")
         : h("p", {}, "Requests from your form land here. ", h("a", { href: "/" }, "Open the form")),
     );
   }
@@ -236,8 +311,12 @@ function renderTickets() {
 function clearFilters() {
   state.status = "";
   state.category = "";
+  state.search = "";
+  $("search").value = "";
   state.snapshot = "";
   history.replaceState(null, "", urlFor(state.current?.id));
+  renderStatusTabs();
+  renderCategoryFilters();
   load();
 }
 
@@ -248,15 +327,16 @@ const isNoteDirty = () => {
   return Boolean(note && state.current && note.value !== state.current.note);
 };
 
+/** Returns false if an unsaved note could not be saved, so the caller can stay put. */
 async function saveNoteIfDirty() {
-  if (!isNoteDirty()) return;
+  if (!isNoteDirty()) return true;
   const lead = state.current;
-  const value = $("note").value;
   try {
-    const saved = await saveLead(lead.id, { note: value });
-    mergeLead(saved);
+    mergeLead(await saveLead(lead.id, { note: $("note").value }));
+    return true;
   } catch (error) {
-    toast(`Note for ${lead.name} not saved. ${error.message}`);
+    if (error.message !== "Signed out") toast(`Note not saved. ${error.message}`);
+    return false;
   }
 }
 
@@ -273,11 +353,12 @@ function renderPlaceholder() {
 
 function contactLinks(lead) {
   const digits = lead.phone.replace(/[^\d+]/g, "");
+  const callable = digits.replace(/\D/g, "").length >= 3;
   const email = encodeURIComponent(lead.email).replace(/%40/g, "@");
   return h("div", { className: "contact-links" },
-    digits.replace(/\D/g, "").length >= 3 && h("a", { className: "contact-link", href: `tel:${digits}` }, "Call ", lead.phone),
-    lead.phone && digits.replace(/\D/g, "").length < 3 && h("span", { className: "contact-link plain" }, lead.phone),
-    h("a", { className: "contact-link", href: `mailto:${email}` }, "Email ", lead.email),
+    callable && h("a", { className: "contact-link", href: `tel:${digits}`, "aria-label": `Call ${lead.phone}` }, icon("phone"), h("span", {}, lead.phone)),
+    lead.phone && !callable && h("span", { className: "contact-link plain" }, icon("phone"), h("span", {}, lead.phone)),
+    h("a", { className: "contact-link", href: `mailto:${email}`, "aria-label": `Email ${lead.email}` }, icon("mail"), h("span", {}, lead.email)),
   );
 }
 
@@ -287,6 +368,7 @@ function statusControl(lead) {
       h("button", {
         type: "button",
         className: "status-option",
+        "data-status": status,
         "aria-pressed": String(lead.status === status),
         onclick: () => changeStatus(status),
       }, capitalize(status)),
@@ -294,23 +376,53 @@ function statusControl(lead) {
   );
 }
 
+/** Updates the stamp and buttons in place, so focus and any note being typed are left alone. */
+function reflectStatus(status, press) {
+  const detail = $("detail");
+  detail.querySelector(".detail-head .stamp")?.replaceWith(
+    h("span", { className: `stamp stamp-${status}${press ? " stamp-press" : ""}` }, capitalize(status)),
+  );
+  for (const option of detail.querySelectorAll(".status-option")) {
+    option.setAttribute("aria-pressed", String(option.dataset.status === status));
+  }
+}
+
 async function changeStatus(status) {
   const previous = state.current;
-  if (!previous || previous.status === status) return;
+  if (!previous || previous.status === status || state.savingStatus) return;
+  state.savingStatus = true;
   state.current = { ...previous, status };
-  renderDetail({ pressStamp: true, keepNote: $("note").value });
+  reflectStatus(status, true);
   try {
-    const saved = await saveLead(previous.id, { status });
-    mergeLead(saved);
+    mergeLead(await saveLead(previous.id, { status }));
     state.snapshot = "";
     renderTickets();
     load();
+    toast(`Marked as ${status}`, { label: "Undo", run: () => undoStatus(previous.id, previous.status) });
   } catch (error) {
     if (state.current?.id === previous.id) {
       state.current = previous;
-      renderDetail();
+      reflectStatus(previous.status, false);
     }
-    toast(`Status not saved. ${error.message}`);
+    if (error.message !== "Signed out") toast(`Status not saved. ${error.message}`);
+  } finally {
+    state.savingStatus = false;
+  }
+}
+
+async function undoStatus(id, status) {
+  try {
+    const saved = await saveLead(id, { status });
+    const isOpen = state.current?.id === id;
+    if (isOpen) state.current = { ...state.current, status: saved.status };
+    state.leads = state.leads.map((lead) => (lead.id === id ? { ...lead, status: saved.status } : lead));
+    if (isOpen) reflectStatus(saved.status, true);
+    state.snapshot = "";
+    renderTickets();
+    load();
+    toast(`Back to ${status}`);
+  } catch (error) {
+    if (error.message !== "Signed out") toast(`Undo failed. ${error.message}`);
   }
 }
 
@@ -321,7 +433,47 @@ const webhookText = {
   failed: "CRM notification failed after 6 tries",
 };
 
-function renderDetail({ pressStamp = false, keepNote } = {}) {
+function noteForm(lead) {
+  const savedText = h("span", { className: "note-saved", role: "status" });
+  const note = h("textarea", { id: "note", rows: "4", placeholder: "Called back, left a voicemail" });
+  note.value = lead.note;
+  const saveButton = h("button", { className: "secondary", type: "submit", disabled: true }, "Save note");
+
+  note.addEventListener("input", () => {
+    saveButton.disabled = note.value === state.current.note;
+    savedText.textContent = "";
+  });
+
+  const form = h("form", {
+    className: "note-form",
+    onsubmit: async (event) => {
+      event.preventDefault();
+      if (!isNoteDirty()) return;
+      saveButton.disabled = true;
+      savedText.textContent = "Saving";
+      try {
+        mergeLead(await saveLead(lead.id, { note: note.value }));
+        savedText.textContent = "Note saved";
+        state.snapshot = "";
+        renderTickets();
+      } catch (error) {
+        savedText.textContent = `Not saved. ${error.message}`;
+        saveButton.disabled = false;
+      }
+    },
+  },
+    h("label", { for: "note" }, "Note"),
+    note,
+    h("div", { className: "note-actions" }, saveButton, savedText),
+  );
+
+  note.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) form.requestSubmit();
+  });
+  return form;
+}
+
+function renderDetail() {
   const lead = state.current;
   document.body.classList.toggle("detail-open", Boolean(lead));
   if (!lead) {
@@ -329,51 +481,21 @@ function renderDetail({ pressStamp = false, keepNote } = {}) {
     return;
   }
 
-  const savedText = h("span", { className: "note-saved", id: "note-saved", role: "status" });
-  const note = h("textarea", { id: "note", rows: "4", placeholder: "Called back, left a voicemail" });
-  note.value = keepNote ?? lead.note;
-
-  const form = h("form", {
-    className: "note-form",
-    onsubmit: async (event) => {
-      event.preventDefault();
-      const button = form.querySelector("button");
-      button.disabled = true;
-      savedText.textContent = "";
-      try {
-        const saved = await saveLead(lead.id, { note: note.value });
-        mergeLead(saved);
-        savedText.textContent = "Note saved";
-        state.snapshot = "";
-        renderTickets();
-      } catch (error) {
-        savedText.textContent = `Not saved. ${error.message}`;
-      } finally {
-        button.disabled = false;
-      }
-    },
-  },
-    h("label", { for: "note" }, "Note"),
-    note,
-    h("div", { className: "note-actions" },
-      h("button", { className: "secondary", type: "submit" }, "Save note"),
-      savedText,
-    ),
-  );
-
   $("detail").replaceChildren(
     h("article", { className: `detail-sheet paper-${lead.urgency}` },
-      h("button", { type: "button", className: "link-button detail-close", onclick: closeLead }, "Back to leads"),
+      h("div", { className: "detail-bar" },
+        h("button", { type: "button", className: "link-button detail-close", onclick: () => closeLead() }, icon("back"), "Back to leads"),
+      ),
       h("div", { className: "detail-head" },
         h("h2", { id: "detail-title", tabindex: "-1" }, lead.name),
-        h("span", { className: `stamp stamp-${lead.status}${pressStamp ? " stamp-press" : ""}` }, capitalize(lead.status)),
+        h("span", { className: `stamp stamp-${lead.status}` }, capitalize(lead.status)),
       ),
       h("p", { className: "detail-tags" }, `${urgencyLabel[lead.urgency]}, ${lead.category}, ${serviceLabel(lead.service).toLowerCase()}`),
       contactLinks(lead),
       h("p", { className: "detail-message" }, lead.message),
       h("h3", { id: "status-label" }, "Status"),
       statusControl(lead),
-      form,
+      noteForm(lead),
       h("dl", { className: "detail-facts" },
         h("div", {}, h("dt", {}, "Received"), h("dd", {}, fullDate(lead.created_at))),
         h("div", {}, h("dt", {}, "Request number"), h("dd", {}, lead.id)),
@@ -382,11 +504,12 @@ function renderDetail({ pressStamp = false, keepNote } = {}) {
       ),
     ),
   );
+  $("detail").scrollTop = 0;
 }
 
 async function openLead(lead, { push = true } = {}) {
   if (state.current?.id === lead.id) return;
-  await saveNoteIfDirty();
+  if (!(await saveNoteIfDirty())) return;
   state.current = state.leads.find((item) => item.id === lead.id) ?? lead;
   if (push) history.pushState(null, "", urlFor(lead.id));
   renderDetail();
@@ -395,7 +518,7 @@ async function openLead(lead, { push = true } = {}) {
 }
 
 async function closeLead({ push = true } = {}) {
-  await saveNoteIfDirty();
+  if (!(await saveNoteIfDirty())) return;
   const id = state.current?.id;
   state.current = null;
   if (push) history.pushState(null, "", urlFor(null));
@@ -407,9 +530,18 @@ async function closeLead({ push = true } = {}) {
 /* ---------- Start ---------- */
 
 $("sign-out").addEventListener("click", async () => {
-  await saveNoteIfDirty();
+  if (!(await saveNoteIfDirty())) return;
   await fetch("/owner/logout", { method: "POST" });
   location.assign("/login");
+});
+
+$("search").addEventListener("input", (event) => {
+  state.search = event.target.value;
+  renderTickets();
+});
+
+window.addEventListener("beforeunload", (event) => {
+  if (isNoteDirty()) event.preventDefault();
 });
 
 window.addEventListener("popstate", () => {
@@ -423,7 +555,7 @@ window.addEventListener("popstate", () => {
 });
 
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && state.current) closeLead();
+  if (event.key === "Escape" && state.current && event.target.id !== "search") closeLead();
 });
 
 setInterval(() => {
@@ -436,6 +568,8 @@ document.addEventListener("visibilitychange", () => {
 
 const initialLead = readUrl();
 renderDetail();
+renderStatusTabs();
+renderCategoryFilters();
 await load();
 if (initialLead) {
   const lead = state.leads.find((item) => item.id === initialLead);
