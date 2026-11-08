@@ -120,9 +120,29 @@ async function classifyByAi(env: Env, input: NewLeadInput): Promise<{ category: 
   }
 }
 
-/** Tries the AI model, then falls back to rules on any failure, timeout or bad answer. */
+/** Text that tries to steer the sorter. Small models can obey it, so it never reaches them. */
+const STEERING_ATTEMPT =
+  /\b(ignore|disregard|forget|override)\b[^.?!\n]{0,40}\b(instructions?|prompts?|rules)\b|\bsystem prompt\b|\b(set|change|mark|make)\b[^.?!\n]{0,30}\b(urgency|category)\b/i;
+
+/** Drops steering sentences, so words like "complaint" inside them can't trigger the rules either. */
+function withoutSteering(message: string): string {
+  return message
+    .split(/(?<=[.?!\n])\s*/)
+    .filter((sentence) => !STEERING_ATTEMPT.test(sentence))
+    .join(" ");
+}
+
+/**
+ * Tries the AI model, then falls back to rules on any failure, timeout or bad answer.
+ * Two business rules hold whichever sorter decides: complaints are high urgency,
+ * and a clear emergency in the text is never downgraded.
+ */
 export async function classify(env: Env, input: NewLeadInput): Promise<Sorting> {
-  const fromAi = await classifyByAi(env, input);
-  if (fromAi) return { ...fromAi, sorted_by: "ai" };
-  return { ...classifyByRules(input), sorted_by: "rules" };
+  const steering = STEERING_ATTEMPT.test(input.message);
+  const rules = classifyByRules({ message: steering ? withoutSteering(input.message) : input.message });
+  const fromAi = steering ? null : await classifyByAi(env, input);
+  if (!fromAi) return { ...rules, sorted_by: "rules" };
+
+  const urgency = fromAi.category === "complaint" || rules.urgency === "high" ? "high" : fromAi.urgency;
+  return { category: fromAi.category, urgency, sorted_by: "ai" };
 }

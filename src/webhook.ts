@@ -4,6 +4,8 @@ import type { Env, Lead } from "./types";
 const SEND_TIMEOUT_MS = 3000;
 /** Minutes to wait before each retry. After the last one the delivery is marked failed. */
 const RETRY_DELAYS_MINUTES = [1, 5, 30, 120, 360];
+/** Each retry is one fetch plus one database write, and the free plan allows 50 per run. */
+const RETRY_BATCH_SIZE = 20;
 
 async function post(url: string, lead: Lead): Promise<string | null> {
   try {
@@ -52,9 +54,9 @@ export async function retryDueWebhooks(env: Env): Promise<void> {
     `SELECT l.id, l.name, l.email, l.phone, l.service, l.message, l.category, l.urgency, l.status, l.note, l.created_at, w.attempts
      FROM webhook_deliveries w JOIN leads l ON l.id = w.lead_id
      WHERE w.status = 'pending' AND w.next_attempt_at <= ?
-     ORDER BY w.next_attempt_at LIMIT 25`,
+     ORDER BY w.next_attempt_at LIMIT ?`,
   )
-    .bind(utcNow())
+    .bind(utcNow(), RETRY_BATCH_SIZE)
     .all<Lead & { attempts: number }>();
 
   for (const { attempts, ...lead } of results) {

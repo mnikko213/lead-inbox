@@ -8,7 +8,8 @@
     "typecheck": "tsc --noEmit",
     "db:migrate:local": "wrangler d1 migrations apply lead-inbox --local",
     "db:migrate:remote": "wrangler d1 migrations apply lead-inbox --remote",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "dev:ai": "wrangler dev"
   },
   "type": "module",
   "dependencies": {

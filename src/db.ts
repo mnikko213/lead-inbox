@@ -118,6 +118,14 @@ export async function getOwnerLead(db: D1Database, id: number): Promise<OwnerLea
     .first<OwnerLead>();
 }
 
+/** Inbox-wide totals for the dashboard header. These ignore the current filters. */
+export async function countInbox(db: D1Database) {
+  const row = await db
+    .prepare("SELECT SUM(status = 'new') AS new_total, SUM(status = 'new' AND urgency = 'high') AS new_high FROM leads")
+    .first<{ new_total: number | null; new_high: number | null }>();
+  return { new_total: row?.new_total ?? 0, new_high: row?.new_high ?? 0 };
+}
+
 /** Counts for filter tabs. Each facet respects the other facet's current filter. */
 export async function countFacets(db: D1Database, filters: LeadFilters) {
   const byStatus = whereClause({ category: filters.category });

@@ -13,7 +13,7 @@ import {
   recordLoginFailure,
 } from "./auth";
 import { classify } from "./classify";
-import { countFacets, getLead, getOwnerLead, insertLead, listLeads, listOwnerLeads, updateLead } from "./db";
+import { countFacets, countInbox, getLead, getOwnerLead, insertLead, listLeads, listOwnerLeads, updateLead } from "./db";
 import type { Env } from "./types";
 import { MAX_BODY_BYTES, parseId, parseJsonObject, validateNewLead, validatePatch } from "./validate";
 import { retryDueWebhooks, sendLeadCreated } from "./webhook";
@@ -138,8 +138,12 @@ app.use("/owner/leads/*", async (c, next) => {
 
 app.get("/owner/leads", async (c) => {
   const filters = filtersFrom(c);
-  const [leads, counts] = await Promise.all([listOwnerLeads(c.env.DB, filters), countFacets(c.env.DB, filters)]);
-  return c.json({ leads, counts });
+  const [leads, counts, summary] = await Promise.all([
+    listOwnerLeads(c.env.DB, filters),
+    countFacets(c.env.DB, filters),
+    countInbox(c.env.DB),
+  ]);
+  return c.json({ leads, counts, summary });
 });
 
 app.patch("/owner/leads/:id", async (c) => {
