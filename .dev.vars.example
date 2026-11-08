@@ -1,0 +1,5 @@
+API_TOKEN=change-me
+OWNER_PASSWORD=change-me
+SESSION_SECRET=change-me-to-a-long-random-string
+# Optional. Leave out to skip the webhook while developing.
+# WEBHOOK_URL=https://example.com/hook

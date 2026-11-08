@@ -1,0 +1,27 @@
+{
+  "name": "lead-inbox",
+  "version": "1.0.0",
+  "description": "Lead inbox: public form, sorted leads, owner dashboard, API and webhook.",
+  "scripts": {
+    "dev": "wrangler dev --local",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "db:migrate:local": "wrangler d1 migrations apply lead-inbox --local",
+    "db:migrate:remote": "wrangler d1 migrations apply lead-inbox --remote",
+    "deploy": "wrangler deploy"
+  },
+  "type": "module",
+  "dependencies": {
+    "hono": "^4.13.17"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.6.0",
+    "@cloudflare/workers-types": "^5.20261108.1",
+    "@fontsource-variable/atkinson-hyperlegible-next": "^5.3.0",
+    "@fontsource-variable/bricolage-grotesque": "^5.3.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.12",
+    "wrangler": "^4.158.0"
+  },
+  "private": true
+}
