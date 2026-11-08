@@ -1,0 +1,30 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Sign in to Leads</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/bricolage.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body class="carbon login-page">
+  <main class="ticket perforated login-ticket">
+    <h1>Sign in to Leads</h1>
+    <form id="login-form" novalidate>
+      <div class="field">
+        <label for="username">Username</label>
+        <input id="username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <p class="form-alert" id="login-alert" role="alert" hidden></p>
+      <button class="primary" id="login-submit" type="submit">Sign in</button>
+    </form>
+  </main>
+  <script type="module" src="/login.js"></script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Request a service</title>
+  <meta name="description" content="Tell us about the job and we'll get back to you.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/bricolage.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body class="carbon">
+  <main class="intake">
+    <header class="intake-intro">
+      <h1>What needs doing?</h1>
+      <p>Tell us about the job. We read every request and reply by phone or email.</p>
+    </header>
+
+    <section class="ticket perforated" aria-label="Service request">
+      <form id="lead-form" novalidate>
+        <div class="field">
+          <label for="name">Your name</label>
+          <input id="name" name="name" type="text" autocomplete="name" aria-describedby="name-error">
+          <p class="field-error" id="name-error" hidden></p>
+        </div>
+
+        <div class="field-pair">
+          <div class="field">
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" inputmode="email" autocomplete="email" aria-describedby="email-error">
+            <p class="field-error" id="email-error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="phone">Phone <span class="optional">(optional)</span></label>
+            <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" aria-describedby="phone-error">
+            <p class="field-error" id="phone-error" hidden></p>
+          </div>
+        </div>
+
+        <fieldset class="field" aria-describedby="service-error">
+          <legend>Type of service</legend>
+          <div class="service-options">
+            <label class="service-option"><input type="radio" name="service" value="cleaning"><span>Cleaning</span></label>
+            <label class="service-option"><input type="radio" name="service" value="repair"><span>Repair</span></label>
+            <label class="service-option"><input type="radio" name="service" value="consultation"><span>Consultation</span></label>
+            <label class="service-option"><input type="radio" name="service" value="other"><span>Other</span></label>
+          </div>
+          <p class="field-error" id="service-error" hidden></p>
+        </fieldset>
+
+        <div class="field">
+          <label for="message">About the job</label>
+          <textarea id="message" name="message" rows="5" aria-describedby="message-error message-count" placeholder="What's the problem, where is it, and when would suit you?"></textarea>
+          <p class="field-hint" id="message-count" hidden></p>
+          <p class="field-error" id="message-error" hidden></p>
+        </div>
+
+        <p class="form-alert" id="form-alert" role="alert" hidden></p>
+        <button class="primary" id="submit" type="submit">Send request</button>
+      </form>
+
+      <div id="receipt" class="receipt" tabindex="-1" hidden>
+        <p class="stamp stamp-press">Received</p>
+        <h2 id="receipt-title"></h2>
+        <p id="receipt-detail"></p>
+        <button class="secondary" id="another" type="button">Send another request</button>
+      </div>
+    </section>
+  </main>
+  <footer class="intake-footer"><a href="/login">Owner sign in</a></footer>
+  <script type="module" src="/form.js"></script>
+</body>
+</html>

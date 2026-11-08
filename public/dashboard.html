@@ -1,0 +1,36 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Leads</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/bricolage.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body class="desk">
+  <header class="desk-header">
+    <div class="desk-header-row">
+      <h1>Leads</h1>
+      <button class="link-button" id="sign-out" type="button">Sign out</button>
+    </div>
+    <nav id="status-tabs" class="status-tabs" aria-label="Filter by status"></nav>
+  </header>
+
+  <div class="workspace">
+    <section class="inbox" aria-label="Leads">
+      <div id="category-filters" class="category-filters" role="group" aria-label="Filter by type"></div>
+      <p id="load-error" class="form-alert" role="alert" hidden></p>
+      <ol id="ticket-list" class="ticket-list"></ol>
+      <div id="empty" class="empty" hidden></div>
+      <p id="list-limit" class="list-limit" hidden></p>
+    </section>
+
+    <aside id="detail" class="detail" aria-label="Lead details"></aside>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <script type="module" src="/dashboard.js"></script>
+</body>
+</html>
