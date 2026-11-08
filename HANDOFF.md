@@ -52,7 +52,7 @@ To deploy your own copy: run `npx wrangler d1 create lead-inbox`, put the new id
 - Lists stop at the newest 200 leads, and search only covers those. There is no paging yet.
 - The AI sorter is a small free model. In my 19-message accuracy check it matched what I expected on all but the two cases now covered by the rules below, but it can still make a judgment call you'd disagree with.
 
-The database has 4 sample leads from my final live tests, and those also went to the webhook.
+The database has a few sample leads from my live tests, and those also went to the webhook.
 
 ## What I assumed where the brief was unclear
 
